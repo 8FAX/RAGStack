@@ -1,0 +1,29 @@
+# Core Libraries
+sys
+os
+json
+dotenv
+requests
+time
+threading
+random
+re
+tqdm
+
+# YouTube API and Transcript Handling
+google-api-python-client
+youtube-search-python
+youtube-transcript-api
+
+# Web Scraping
+beautifulsoup4
+
+# Milvus and Vector Embeddings
+pymilvus==2.2.7 
+numpy  
+
+# GUI
+tk
+
+# Ensure compatibility
+python-dotenv  
