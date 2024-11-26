@@ -62,7 +62,7 @@ class Retriever:
             print(f"Request failed: {e}")
             return None
 
-    def retrieve(self, query, top_k=5):
+    def retrieve(self, query, top_k=25):
         embedding = self.get_embedding(query)
         if embedding is None:
             print("Failed to get embedding for the query.")
