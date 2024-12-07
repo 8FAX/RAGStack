@@ -15,10 +15,11 @@ dotenv.load_dotenv()
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
-OUTPUT_DIR = "data/text_data"
-SUMMARY_DIR = "data/summaries"
-CACHE_FILE = "data/processed_videos.json"
-QUEUE_FILE = "data/queue.json"
+OUTPUT_DIR = "scraped_data/youtube/text_data"
+SUMMARY_DIR = "scraped_data/youtube/summaries"
+CACHE_FILE = "scraped_data/youtube/processed_videos.json"
+QUEUE_FILE = "scraped_data/youtube/queue.json"
+FAILED_CACHE_FILE = "scraped_data/youtube/failed_videos.json"
 CONTEXT_WINDOW = 5000
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -33,6 +34,7 @@ stats = {
     "avg_summary_time": 0,
     "total_runtime": 0,
     "iteration_num": 0,
+    "failed_cache": 0
 }
 errors = []
 
@@ -63,6 +65,7 @@ Total Summaries Created: {stats['total_summaries']}
 Average Time per Summary: {stats['avg_summary_time']:.2f}s
 Total Runtime: {stats['total_runtime']:.2f}s
 Iteration Number: {stats['iteration_num']}
+Failed Videos: {stats['failed_cache']}
 """
         sys.stdout.write("\033c")  # Clear console
         sys.stdout.write(console_output)
@@ -141,53 +144,45 @@ def save_queue(queue):
 
 
 def log_error(message):
-    """
-    The function `log_error` logs an error message to a list called `errors` and ensures that the list
-    does not exceed 100 messages by removing the oldest message if necessary.
-    
-    Author - Liam Scott
-    Last update - 11/25/2024
-    
-    @ param message ()  - The `message` parameter in the `log_error` function is a string that
-    represents the error message that you want to log to the errors list.
-    
-    """
-    """Log an error to the errors list."""
     errors.append(message)
     if len(errors) > 100:
         errors.pop(0)
 
 
-def download_transcript(video_id):
-    """
-    The function `download_transcript` attempts to fetch the English transcript of a YouTube video based
-    on its video ID, logging errors if any occur.
+def load_failed_cache():
+
+    if os.path.exists(FAILED_CACHE_FILE):
+        with open(FAILED_CACHE_FILE, 'r') as file:
+            return set(json.load(file))
+    return set()
+
+def save_failed_cache(failed_cache):
+
+    with open(FAILED_CACHE_FILE, 'w') as file:
+        json.dump(list(failed_cache), file)
+
+def download_transcript(video_id, failed_cache):
+    if video_id in failed_cache:
+        log_error(f"Skipping video {video_id} as it's in the failed cache.")
+        return None
     
-    Author - Liam Scott
-    Last update - 11/25/2024
-    
-    @ param video_id ()  - The `download_transcript` function you provided seems to be a Python function
-    that attempts to download the English transcript for a given video ID using the
-    `YouTubeTranscriptApi`. If successful, it returns the transcript text; otherwise, it logs an error
-    message and returns `None`.
-    
-    @ returns The function `download_transcript(video_id)` will return the English transcript of the
-    video with the specified `video_id` if it is available. If there is no English transcript available
-    for the video, it will log an error message and return `None`. If an exception occurs during the
-    process of downloading the transcript, it will log an error message with the reason for the
-    exception and return `None`.
-    
-    """
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         for transcript in transcript_list:
             if transcript.language_code == 'en':
                 return transcript.fetch()
         log_error(f"No English transcript available for video: {video_id}")
+        failed_cache.add(video_id)
+        save_failed_cache(failed_cache)
+        stats["failed_cache"] += 1
         return None
     except Exception as e:
         log_error(f"Error downloading transcript for video: {video_id}. Reason: {str(e)}")
+        failed_cache.add(video_id)
+        save_failed_cache(failed_cache)
+        stats["failed_cache"] += 1
         return None
+
 
 
 def get_video_details(video_id):
@@ -283,27 +278,31 @@ def save_as_text(video_id, video_details, transcript, output_dir):
         return None
 
 
-def search_and_download_videos(query, output_dir, max_videos, cached_video_ids, queue):
+def search_and_download_videos(query, output_dir, max_videos, cached_video_ids, queue, failed_cache):
     """
     The function searches for and downloads videos based on a query, storing them in an output directory
-    while managing a queue and cached video IDs.
+    while managing a queue and error cache.
     
     Author - Liam Scott
-    Last update - 11/25/2024
+    Last update - 12/04/2024
     
     @ param query ()  - The `query` parameter is the search query used to search for videos on YouTube.
-    @ param output_dir ()  - The `output_dir` parameter is the directory where the downloaded videos
-    will be saved. It is the location on your file system where the downloaded video files will be
-    stored.
-    @ param max_videos ()  - The `max_videos` parameter specifies the maximum number of videos to search
-    for and potentially download based on the given query.
-    @ param cached_video_ids ()  - The `cached_video_ids` parameter is a set that stores the video IDs
-    of videos that have already been downloaded or processed. This set is used to avoid downloading the
+    It is a string that represents the search term or keywords you want to use to find relevant videos.
+    @ param output_dir ()  - The `output_dir` parameter in the `search_and_download_videos` function is
+    the directory where the downloaded videos will be saved.
+    @ param max_videos ()  - The `max_videos` parameter in the `search_and_download_videos` function
+    specifies the maximum number of videos to search for and potentially download based on the given
+    query.
+    @ param cached_video_ids ()  - The `cached_video_ids` parameter likely stores a set of video IDs
+    that have already been downloaded or processed in some way. This set is used to skip processing the
     same video multiple times.
-    @ param queue ()  - The `queue` parameter in the `search_and_download_videos` function seems to be a
-    list that holds file paths of downloaded videos. It is used to keep track of the videos that have
-    been successfully downloaded and saved as text files. The function checks the length of the queue
-    and waits if it reaches
+    @ param queue ()  - The `queue` parameter in the `search_and_download_videos` function is a list
+    that stores the file paths of downloaded videos. It is used to keep track of the videos that have
+    been successfully downloaded and saved as text files. The function appends the file path of each
+    successfully downloaded video to the
+    @ param failed_cache ()  - The `failed_cache` parameter likely stores the video IDs that were not
+    successfully downloaded or processed in previous attempts. This can help prevent repeatedly
+    attempting to download the same videos that have previously failed, saving time and resources.
     
     """
     try:
@@ -312,17 +311,17 @@ def search_and_download_videos(query, output_dir, max_videos, cached_video_ids, 
 
         for video in results:
             while len(queue) >= 100:
-                time.sleep(60)  # Wait if queue is full
+                time.sleep(60)  
 
             video_id = video['id']
-            if video_id in cached_video_ids:
+            if video_id in cached_video_ids or video_id in failed_cache:
                 continue
 
             video_details = get_video_details(video_id)
             if not video_details:
                 continue
 
-            transcript = download_transcript(video_id)
+            transcript = download_transcript(video_id, failed_cache)
             if transcript:
                 file_path = save_as_text(video_id, video_details, transcript, output_dir)
                 if file_path:
@@ -331,9 +330,25 @@ def search_and_download_videos(query, output_dir, max_videos, cached_video_ids, 
                     save_queue(queue)
                     save_cache(cached_video_ids)
                     stats["queue_size"] = len(queue)
-
     except Exception as e:
-        log_error(f"Error searching and downloading videos. Reason: {str(e)}")
+        if "quota" in str(e).lower():
+            log_error("Daily quota exceeded. Exiting program.")
+            while True:
+                queue = load_queue()
+                if len(queue) == 0:
+                    sys.exit(0)
+                else:
+                    time.sleep(60)
+        if "Subtitles are disabled for this video" in str(e):
+            #log_error(f"Skipping video due to disabled subtitles: {video_id}")
+            failed_cache.add(video_id)
+            save_failed_cache(failed_cache)
+            stats["failed_cache"] += 1
+        else:
+            log_error(f"Error searching for videos. Reason: {str(e)}")
+            failed_cache.add(video_id)
+            save_failed_cache(failed_cache)
+            stats["failed_cache"] += 1
 
 
 def process_queue(queue):
@@ -360,7 +375,7 @@ def process_queue(queue):
 
         start_time = time.time()
         try:
-            print(f"Processing file: {file_path}")
+            #print(f"Processing file: {file_path}")
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
 
@@ -485,8 +500,8 @@ class Generator:
                 json={"model": "llama3.1:8b", "prompt": prompt},
                 stream=True
             )
-            log_error(f"Response Status Code: {response.status_code}")
-            log_error(f"Response Headers: {response.headers}")
+            #log_error(f"Response Status Code: {response.status_code}")
+            #log_error(f"Response Headers: {response.headers}")
 
             response.raise_for_status()
             full_response = ""
@@ -509,19 +524,11 @@ class Generator:
 
 
 def main():
-    """
-    The main function reads topics from a file, processes them in iterations, and searches and downloads
-    videos based on the topics.
-    
-    Author - Liam Scott
-    Last update - 11/25/2024
-    
-    
-    """
     topic_file = "input.txt"
     num_iterations = 1000
     cached_video_ids = load_cache()
     queue = load_queue()
+    failed_cache = load_failed_cache()
 
     threading.Thread(target=process_queue, args=(queue,), daemon=True).start()
     threading.Thread(target=print_console_stats, daemon=True).start()
@@ -532,9 +539,14 @@ def main():
     for i in range(num_iterations):
         stats["iteration_num"] = i + 1
         for topic in topics:
-            search_and_download_videos(topic, OUTPUT_DIR, max_videos=40, cached_video_ids=cached_video_ids, queue=queue)
-
+            search_and_download_videos(
+                topic,
+                OUTPUT_DIR,
+                max_videos=40,
+                cached_video_ids=cached_video_ids,
+                queue=queue,
+                failed_cache=failed_cache
+            )
 
 if __name__ == "__main__":
     main()
-

@@ -31,7 +31,7 @@ class Retriever:
             response = requests.post(
                 "http://127.0.0.1:11434/api/embed",  
                 headers={"Content-Type": "application/json"},
-                json={"model": "llama3.1:8b", "input": text}
+                json={"model": "snowflake-arctic-embed2:latest", "input": text}
             )
             print(f"Response Status Code: {response.status_code}")
             print("Response Headers:", response.headers)

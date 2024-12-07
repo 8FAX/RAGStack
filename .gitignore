@@ -2,6 +2,7 @@
 /data/*
 /volumes
 /scraped_data
+/photos
 
 .env
 input.txt

@@ -91,7 +91,7 @@ class TextEmbeddingProcessor:
             response = requests.post(
                 self.api_url,
                 headers={"Content-Type": "application/json"},
-                json={"model": "llama3.1:8b", "input": text},
+                json={"model": "snowflake-arctic-embed2:latest", "input": text},
             )
             response.raise_for_status()
             data = response.json()
@@ -107,7 +107,7 @@ class TextEmbeddingProcessor:
             return None
 
     @staticmethod
-    def split_text_into_chunks(text, max_length=1024, overlap=50):
+    def split_text_into_chunks(text, max_length=1024, overlap=150):
         chunks = []
         start = 0
         text_length = len(text)
@@ -195,7 +195,7 @@ def main():
         "host": "127.0.0.1",
         "port": "19530",
         "collection_name": "embedded_texts",
-        "embedding_dim": 4096, 
+        "embedding_dim": 1024, 
     }
     EMBEDDING_API_URL = "http://127.0.0.1:11434/api/embed"
     DATA_PATH = "./data"
