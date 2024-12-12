@@ -4,5 +4,15 @@
 /scraped_data
 /photos
 
+src/web/backend/node_modules
+src/web/backend/package-lock.json
+src/web/frontend/node_modules
+src/web/frontend/package-lock.json
+
+src/web/*
+
+
 .env
 input.txt
+chats.db
+user.db

@@ -172,7 +172,7 @@ Context:
 Question: {user_query}
 Answer:"""
 
-        print(f"Generated prompt:\n{prompt}\n")
+        #print(f"Generated prompt:\n{prompt}\n")
 
         response = self.generator.generate_response(prompt)
         self.chat_display.insert(tk.END, f"Bot: {response}\n")
